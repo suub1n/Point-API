@@ -62,6 +62,10 @@
    ./gradlew bootRun
    ```
 
+## API Docs (Swagger)
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+
 ## API Endpoints
 ### 회원
 #### 1. **회원가입 `POST /api/v1/members`**
@@ -72,7 +76,7 @@
    }
   ```
 
-#### 2. **포인트 설정 변경 `POST /api/v1/members/{memberId}/update`**
+#### 2. **포인트 설정 변경 `PATCH /api/v1/members/{memberId}/point-settings`**
 - **요청 페이로드**
   ```json
    {
@@ -81,7 +85,7 @@
    }
   ```
 ### 포인트
-#### 1. **포인트 지급 `POST /api/v1/points/earn`**
+#### 1. **포인트 지급 `POST /api/v1/points/earnings`**
 - **요청 페이로드**
   ```json
     {
@@ -91,8 +95,9 @@
         "expireDays": 365
     }
   ```
+- `expireDays`는 선택값입니다. 미입력 시 기본 만료일(설정값)이 적용됩니다.
 
-#### 2. **포인트 지급 취소 `POST /api/v1/points/earn/cancel`**
+#### 2. **포인트 지급 취소 `POST /api/v1/points/earnings/cancellations`**
 - **요청 페이로드**
   ```json
     {
@@ -101,7 +106,7 @@
     }
   ```
 
-#### 3. **포인트 사용 `POST /api/v1/points/use`**
+#### 3. **포인트 사용 `POST /api/v1/points/usages`**
 - **요청 페이로드**
   ```json
     {
@@ -111,7 +116,7 @@
     }
   ```
 
-#### 4. **포인트 사용 취소 `POST /api/v1/points/use/cancel`**
+#### 4. **포인트 사용 취소 `POST /api/v1/points/usages/cancellations`**
 - **요청 페이로드**
   ```json
     {
@@ -120,3 +125,12 @@
       "orderId": "ORDER001"
     }
   ```
+
+## 변경 사항 요약
+- 레거시 엔드포인트 제거
+  - `POST /api/v1/members/{memberId}/update`
+  - `POST /api/v1/points/earn`
+  - `POST /api/v1/points/earn/cancel`
+  - `POST /api/v1/points/use`
+  - `POST /api/v1/points/use/cancel`
+- REST 리소스 중심 경로로 통일
