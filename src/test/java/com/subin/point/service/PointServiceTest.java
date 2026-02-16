@@ -118,6 +118,22 @@ public class PointServiceTest {
     }
 
     @Test
+    public void 만료일_미입력시_기본만료일_적용_테스트() {
+        // Given
+        Long amount = 5000L;
+
+        // When
+        Point point = pointService.earn(member.getId(), amount, true, null);
+        pointRepository.flush();
+
+        // Then
+        LocalDateTime expectedFrom = LocalDateTime.now().plusDays(364);
+        LocalDateTime expectedTo = LocalDateTime.now().plusDays(366);
+        assertTrue(point.getExpireAt().isAfter(expectedFrom));
+        assertTrue(point.getExpireAt().isBefore(expectedTo));
+    }
+
+    @Test
     public void 포인트사용_성공_테스트() {
         // Given
         Long earnPoint = 10000L;
@@ -264,6 +280,31 @@ public class PointServiceTest {
         // Then
         assertEquals(0L, point.getUsedAmount());
         assertEquals(amount, point.getAvailableAmount());
+    }
+
+    @Test
+    public void 다회_부분취소시_순사용포인트_기준으로_차감_테스트() {
+        // Given - 만료일이 빠른 A를 먼저 사용하도록 설정
+        Point pointA = pointService.earn(member.getId(), 500L, true, 10);
+        Point pointB = pointService.earn(member.getId(), 500L, true, 20);
+        pointRepository.flush();
+
+        pointService.usePoint(member.getId(), 800L, "ORDER-MULTI-CANCEL");
+        pointRepository.flush();
+
+        // When - 두 번에 걸쳐 부분 취소
+        pointService.cancelPointUse(member.getId(), "ORDER-MULTI-CANCEL", 200L);
+        pointService.cancelPointUse(member.getId(), "ORDER-MULTI-CANCEL", 500L);
+        pointRepository.flush();
+
+        // Then - 총 사용 포인트는 100만 남아야 한다.
+        Point updatedA = pointRepository.findById(pointA.getId()).orElseThrow();
+        Point updatedB = pointRepository.findById(pointB.getId()).orElseThrow();
+
+        assertEquals(0L, updatedA.getUsedAmount());
+        assertEquals(100L, updatedB.getUsedAmount());
+        assertEquals(100L, updatedA.getUsedAmount() + updatedB.getUsedAmount());
+        assertEquals(900L, updatedA.getAvailableAmount() + updatedB.getAvailableAmount());
     }
 
     @Test

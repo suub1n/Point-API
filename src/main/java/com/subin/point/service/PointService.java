@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static com.subin.point.dto.reponse.Code.*;
 
@@ -154,19 +153,22 @@ public class PointService {
             throw new PointServiceException(NOT_FOUND_USING_POINT);
         }
 
-        // 포인트 ID별 순 사용 포인트 계산 및 필터링
-        List<PointTransaction> filteredTransactions = transactions.stream()
-                .collect(Collectors.groupingBy(t -> t.getPoint().getId()))
-                .entrySet().stream()
-                .filter(entry -> entry.getValue().stream()
-                        .mapToLong(t -> t.getType() == TransactionType.USE ? t.getAmount() : -t.getAmount())
-                        .sum() != 0)
-                .flatMap(entry -> entry.getValue().stream())
-                .toList();
+        // 트랜잭션 생성 순서 기준으로 포인트별 순사용 포인트(USE - USECANCEL) 계산
+        Map<Long, Point> pointById = new HashMap<>();
+        Map<Long, Long> netUsedByPointId = new HashMap<>();
+        transactions.stream()
+                .sorted(Comparator.comparing(PointTransaction::getCreatedAt).thenComparing(PointTransaction::getId))
+                .forEach(transaction -> {
+                    Long pointId = transaction.getPoint().getId();
+                    pointById.putIfAbsent(pointId, transaction.getPoint());
+                    long delta = transaction.getType() == TransactionType.USE ? transaction.getAmount() : -transaction.getAmount();
+                    netUsedByPointId.merge(pointId, delta, Long::sum);
+                });
 
-        // 총 사용된 포인트 계산 (USE - USECANCEL)
-        Long totalUsed = transactions.stream()
-                .mapToLong(t -> t.getType() == TransactionType.USE ? t.getAmount() : -t.getAmount())
+        // 총 사용된 포인트 계산 (포인트별 순사용 포인트의 양수 합)
+        Long totalUsed = netUsedByPointId.values().stream()
+                .filter(used -> used > 0)
+                .mapToLong(Long::longValue)
                 .sum();
 
         // 취소 금액이 사용 금액보다 큰 금액인지 검증
@@ -175,24 +177,31 @@ public class PointService {
         }
 
         Long remainingCancelAmount = amount;
+        LocalDateTime now = LocalDateTime.now();
 
-        for (PointTransaction transaction : filteredTransactions) {
+        // 순사용 포인트가 남은 적립건만 취소 대상으로 사용
+        List<Point> pointsToCancel = netUsedByPointId.entrySet().stream()
+                .filter(entry -> entry.getValue() > 0)
+                .map(entry -> pointById.get(entry.getKey()))
+                .sorted(Comparator.comparing(Point::getExpireAt).thenComparing(Point::getId))
+                .toList();
+
+        for (Point point : pointsToCancel) {
             if (remainingCancelAmount <= 0) break;
 
-            Long cancelableAmount = Math.min(remainingCancelAmount, transaction.getAmount());
+            Long usedByPoint = netUsedByPointId.get(point.getId());
+            Long cancelableAmount = Math.min(remainingCancelAmount, usedByPoint);
             remainingCancelAmount -= cancelableAmount;
 
-            Point point = transaction.getPoint();
-
             // 만료 여부에 따라 처리
-            if (point.getExpireAt().isBefore(LocalDateTime.now())) {
+            if (point.getExpireAt().isBefore(now)) {
                 // 만료된 경우, 신규 포인트로 재적립
                 Point newPoint = Point.createPoint(member, cancelableAmount, point.isManual(), defaultExpireDays);
                 pointRepository.save(newPoint);
                 // 사용취소
                 pointTransactionRepository.save(PointTransaction.createTransaction(cancelableAmount, orderId, TransactionType.USECANCEL, member, point));
                 // 만료 재적립
-                pointTransactionRepository.save(PointTransaction.createTransaction(cancelableAmount, orderId, TransactionType.REISSUE, member, point));
+                pointTransactionRepository.save(PointTransaction.createTransaction(cancelableAmount, orderId, TransactionType.REISSUE, member, newPoint));
             } else {
                 // 만료되지 않은 경우, 사용 포인트 반환
                 point.setUsedAmount(point.getUsedAmount() - cancelableAmount);
@@ -202,6 +211,11 @@ public class PointService {
                 // 적립
                 pointTransactionRepository.save(PointTransaction.createTransaction(cancelableAmount, orderId, TransactionType.EARN, member, point));
             }
+        }
+
+        // 데이터 불일치 방어
+        if (remainingCancelAmount > 0) {
+            throw new PointServiceException(NOT_ENOUGH_CANCEL_POINT);
         }
     }
 
