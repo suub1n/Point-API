@@ -12,6 +12,9 @@ import java.util.List;
 @Entity
 public class Member {
 
+    public static final long DEFAULT_MAX_EARN_POINT = 100_000L;
+    public static final long DEFAULT_MAX_HOLD_POINT = 150_000L;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -28,16 +31,16 @@ public class Member {
     @OneToMany(mappedBy = "member", cascade = CascadeType.ALL)
     private List<Point> points = new ArrayList<>();
 
-    // 신규 회원 생성
+    // 기본 포인트 한도를 가진 신규 회원을 생성한다.
     public static Member createMember(String name) {
         Member member = new Member();
         member.setName(name);
-        member.setMaxEarnPoint(100000L);  // 1회 최대 적립 포인트 기본값: 10만
-        member.setMaxHoldPoint(150000L);  // 최대 보유 포인트 기본값: 15만
+        member.setMaxEarnPoint(DEFAULT_MAX_EARN_POINT);
+        member.setMaxHoldPoint(DEFAULT_MAX_HOLD_POINT);
         return member;
     }
 
-    // 회원 적립, 보유 포인트 설정 변경
+    // 회원의 포인트 적립/보유 한도를 변경한다.
     public void updateMemberPointSettings(Long maxEarnPoint, Long maxHoldPoint) {
         this.setMaxEarnPoint(maxEarnPoint);
         this.setMaxHoldPoint(maxHoldPoint);

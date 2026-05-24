@@ -10,4 +10,6 @@ import java.util.Optional;
 public interface MemberRepository extends JpaRepository<Member, Long> {
 
     Optional<Member> findFirstByName(String name);
+
+    boolean existsByName(String name);
 }
