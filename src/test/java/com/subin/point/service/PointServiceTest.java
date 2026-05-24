@@ -318,11 +318,12 @@ public class PointServiceTest {
         pointService.usePoint(member.getId(), useAmount, "ORDER001");
         pointRepository.flush();
 
-        point.setExpireAt(LocalDateTime.now().minusDays(1)); // 포인트 만료일 경과
-        pointRepository.flush();
+        Point expiredPoint = pointRepository.findById(point.getId()).orElseThrow();
+        expiredPoint.setExpireAt(LocalDateTime.now().minusDays(1)); // 포인트 만료일 경과
+        pointRepository.saveAndFlush(expiredPoint);
 
         // When
-        pointService.cancelPointUse(member.getId(), "ORDER001", 3000L);
+        pointService.cancelPointUse(member.getId(), "ORDER001", useAmount);
         pointRepository.flush();
 
         // Then
@@ -330,7 +331,7 @@ public class PointServiceTest {
         assertEquals(1, availablePoints.size());
         Point newPoint = availablePoints.get(0);
 
-        assertEquals(amount, newPoint.getAvailableAmount());
+        assertEquals(useAmount, newPoint.getAvailableAmount());
         assertEquals(0L, newPoint.getUsedAmount());
         assertTrue(newPoint.getExpireAt().isAfter(LocalDateTime.now()));
         assertNull(newPoint.getCanceledAt());
@@ -369,7 +370,7 @@ public class PointServiceTest {
 
         // Step D: A의 적립이 만료되었다
         updatedPointA.setExpireAt(LocalDateTime.now().minusDays(1));
-        pointRepository.flush();
+        pointRepository.saveAndFlush(updatedPointA);
 
         // Step E: C의 사용금액 1200원 중 1100원을 부분 사용 취소 (총 잔액 300 -> 1400원)
         Long cancelAmount = 1100L;
